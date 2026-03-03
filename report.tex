@@ -1,0 +1,239 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{parskip}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Advanced Computational Biology}
+\lhead{Assignment 1 - Variant Calling Pipeline}
+\rfoot{Page \thepage}
+
+\definecolor{codegray}{gray}{0.95}
+\lstset{
+    backgroundcolor=\color{codegray},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    language=bash
+}
+
+\title{
+    \vspace{-1cm}
+    \Large \textbf{HG002 Variant Calling Pipeline} \\
+    \large Assignment 1 - Advanced Computational Biology \\
+    \normalsize NUST SINES
+}
+\author{Sara Naveed}
+\date{March 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+
+%-------------------------------------------
+\section{Introduction}
+
+Variant calling is a fundamental step in genomic analysis that identifies differences between a sequenced genome and a reference genome. These variants include Single Nucleotide Polymorphisms (SNPs) and insertions/deletions (INDELs). This report describes a production-ready variant calling pipeline developed for the HG002 sample (Genome in a Bottle) using PacBio HiFi long-read sequencing data.
+
+The pipeline was implemented using Nextflow workflow management system with SLURM job scheduler and Singularity containers on an HPC cluster. Two state-of-the-art variant callers were used: Clair3 and DeepVariant, both benchmarked against the GIAB truth set.
+
+%-------------------------------------------
+\section{Methods}
+
+\subsection{Dataset}
+The input data used was PacBio HiFi reads from the HG002 sample:
+\begin{itemize}
+    \item \textbf{BAM file}: m21009\_241011\_231051.hifi\_reads.bam
+    \item \textbf{Source}: PacBio Cloud (2024Q4/Vega/HG002)
+    \item \textbf{Reads used}: 168,147 reads (subset of full dataset, \textasciitilde5\%)
+    \item \textbf{Reference genome}: GRCh38 primary assembly
+    \item \textbf{Truth set}: GIAB HG002 v4.2.1 benchmark VCF (chr1-22)
+\end{itemize}
+
+\subsection{Pipeline Overview}
+
+The pipeline was built using Nextflow DSL2 with the following steps:
+
+\begin{enumerate}
+    \item \textbf{Read Alignment}: PacBio HiFi reads were aligned to GRCh38 using minimap2 with the \texttt{map-hifi} preset
+    \item \textbf{BAM Indexing}: Aligned BAM was sorted and indexed using samtools
+    \item \textbf{Variant Calling}: Two variant callers were run in parallel:
+    \begin{itemize}
+        \item Clair3 (HiFi model)
+        \item DeepVariant (PACBIO model)
+    \end{itemize}
+    \item \textbf{Filtering}: Variants were filtered to keep only chromosomes 1-22
+    \item \textbf{Benchmarking}: Results compared to GIAB truth set using hap.py with vcfeval engine
+\end{enumerate}
+
+\subsection{Software and Tools}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Tool} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+Nextflow & 25.10.4 & Workflow management \\
+Singularity & 3.8+ & Container runtime \\
+SLURM & - & HPC job scheduler \\
+minimap2 & 2.30 & Read alignment \\
+samtools & 1.23 & BAM processing \\
+Clair3 & latest & Variant calling \\
+DeepVariant & latest & Variant calling \\
+hap.py & latest & Benchmarking \\
+\bottomrule
+\end{tabular}
+\caption{Software tools used in the pipeline}
+\end{table}
+
+\subsection{Nextflow Pipeline}
+
+The pipeline was implemented as a Nextflow DSL2 workflow with SLURM executor and Singularity containers. Key configuration parameters:
+
+\begin{lstlisting}
+profiles {
+    slurm {
+        process.executor = 'slurm'
+        process.queue = 'gpu'
+        process.cpus = 16
+        process.memory = '64 GB'
+        process.time = '48h'
+    }
+}
+singularity {
+    enabled = true
+    autoMounts = true
+}
+\end{lstlisting}
+
+The pipeline was run using:
+\begin{lstlisting}
+nextflow run main.nf -profile slurm -resume
+\end{lstlisting}
+
+%-------------------------------------------
+\section{Results}
+
+\subsection{Read Alignment}
+A total of 168,147 PacBio HiFi reads were successfully aligned to the GRCh38 reference genome using minimap2. The alignment produced a sorted and indexed BAM file of 1.5 GB.
+
+\subsection{Variant Calling}
+Both Clair3 and DeepVariant successfully called variants from the aligned reads:
+\begin{itemize}
+    \item \textbf{Clair3}: Produced 1,595,303 variant records
+    \item \textbf{DeepVariant}: Produced 1,188,511 variant records
+\end{itemize}
+
+\subsection{Benchmarking Results}
+
+Variants were benchmarked against the GIAB HG002 truth set (v4.2.1) for chromosomes 1-22 using hap.py with the vcfeval engine.
+
+\subsubsection{Clair3 Results}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lllll@{}}
+\toprule
+\textbf{Type} & \textbf{Filter} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 Score} \\
+\midrule
+SNP   & ALL  & 0.8495 & 0.2739 & 0.4142 \\
+SNP   & PASS & 0.8498 & 0.2739 & 0.4143 \\
+INDEL & ALL  & 0.5622 & 0.1840 & 0.2773 \\
+INDEL & PASS & 0.6227 & 0.1682 & 0.2648 \\
+\bottomrule
+\end{tabular}
+\caption{Clair3 benchmarking results against GIAB HG002 truth set}
+\end{table}
+
+\subsubsection{DeepVariant Results}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lllll@{}}
+\toprule
+\textbf{Type} & \textbf{Filter} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 Score} \\
+\midrule
+SNP   & ALL  & 0.8365 & 0.1877 & 0.3067 \\
+SNP   & PASS & 0.8365 & 0.1877 & 0.3068 \\
+INDEL & ALL  & 0.7218 & 0.1272 & 0.2162 \\
+INDEL & PASS & 0.7218 & 0.1272 & 0.2162 \\
+\bottomrule
+\end{tabular}
+\caption{DeepVariant benchmarking results against GIAB HG002 truth set}
+\end{table}
+
+\subsubsection{Comparison Summary}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Caller} & \textbf{SNP Precision} & \textbf{SNP Recall} & \textbf{SNP F1} \\
+\midrule
+Clair3      & 0.8498 & 0.2739 & 0.4142 \\
+DeepVariant & 0.8365 & 0.1877 & 0.3067 \\
+\bottomrule
+\end{tabular}
+\caption{Comparison of SNP performance between Clair3 and DeepVariant}
+\end{table}
+
+%-------------------------------------------
+\section{Discussion}
+
+\subsection{Precision Analysis}
+Both callers achieved high precision scores:
+\begin{itemize}
+    \item Clair3 SNP precision: \textbf{84.98\%}
+    \item DeepVariant SNP precision: \textbf{83.65\%}
+\end{itemize}
+This indicates that the majority of called variants are true positives, confirming the pipeline is working correctly.
+
+\subsection{Recall Analysis}
+Both callers showed relatively low recall values (27.4\% for Clair3, 18.8\% for DeepVariant). This is expected because only \textasciitilde5\% of the full dataset was used (168,147 reads out of millions). With the full dataset, recall would be expected to exceed 90\% for both callers based on published benchmarks.
+
+\subsection{Clair3 vs DeepVariant}
+\begin{itemize}
+    \item \textbf{Clair3} achieved higher recall (27.4\% vs 18.8\% for SNPs) suggesting it is more sensitive with limited data
+    \item \textbf{DeepVariant} achieved higher INDEL precision (72.2\% vs 56.2\%) suggesting it is more specific for indel calling
+    \item Both tools showed comparable SNP precision (\textasciitilde84-85\%)
+\end{itemize}
+
+\subsection{Limitations}
+The main limitation of this analysis is the use of only 5\% of the available sequencing data due to download constraints. A full analysis with the complete dataset would yield significantly higher recall values and more meaningful benchmark comparisons.
+
+%-------------------------------------------
+\section{Conclusion}
+
+A production-ready variant calling pipeline was successfully implemented using Nextflow, SLURM, and Singularity on an HPC cluster. The pipeline integrates two state-of-the-art variant callers (Clair3 and DeepVariant) and benchmarks results against the GIAB truth set using hap.py.
+
+Key achievements:
+\begin{itemize}
+    \item Successfully aligned 168,147 PacBio HiFi reads to GRCh38
+    \item Called variants using both Clair3 and DeepVariant
+    \item Achieved SNP precision of 84.98\% (Clair3) and 83.65\% (DeepVariant)
+    \item Benchmarked results against GIAB v4.2.1 truth set
+    \item Pipeline is fully reproducible via Nextflow + Singularity
+\end{itemize}
+
+The pipeline is available on GitHub with complete documentation for reproduction.
+
+%-------------------------------------------
+\section*{References}
+\begin{enumerate}
+    \item Zheng Z, et al. (2022). Symphonizing pileup and full-alignment for deep learning-based long-read variant calling. \textit{Nature Computational Science}.
+    \item Poplin R, et al. (2018). A universal SNP and small-indel variant caller using deep neural networks. \textit{Nature Biotechnology}.
+    \item Zook JM, et al. (2019). An open resource for accurately benchmarking small variant and reference calls. \textit{Nature Biotechnology}.
+    \item Li H. (2018). Minimap2: pairwise alignment for nucleotide sequences. \textit{Bioinformatics}.
+\end{enumerate}
+
+\end{document}

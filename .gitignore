@@ -1,0 +1,12 @@
+# Large files
+*.fastq
+*.fastq.gz
+*.bam
+*.vcf
+*.vcf.gz
+
+# Work directories
+work/
+.nextflow/
+results/
+logs/
