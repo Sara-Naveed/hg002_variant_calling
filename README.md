@@ -15,10 +15,19 @@ Production-ready Nextflow pipeline for variant calling on PacBio HiFi data using
 - samtools (via conda)
 
 ## Input Data
-- PacBio HiFi BAM: m21009_241011_231051.hifi_reads.bam
-- Source: https://downloads.pacbcloud.com/public/2024Q4/Vega/HG002/data/
+- PacBio HiFi BAM (HG002 subset, ~168K reads)
+- Source: PacBio public dataset (2024 Q4)
 - Reference: GRCh38 primary assembly
 - Used 168,147 reads (subset of full dataset)
+ 
+## Key Features
+"Why This Pipeline?"
+-  Automated end-to-end pipeline (no manual steps)
+-  Dual variant caller comparison (Clair3 vs DeepVariant)
+-  GIAB truth-set benchmarking included
+-  HPC-ready (SLURM + Singularity)
+-  Resumable pipeline (-resume flag)
+
 
 ## Pipeline Steps
 1. Align reads - minimap2 aligns FASTQ to GRCh38 reference
@@ -83,9 +92,10 @@ Benchmarked against GIAB HG002 truth set v4.2.1 (chr1-22)
 | INDEL | 0.7218    | 0.1272 | 0.2162   |
 
 ### Notes
-- Low recall is expected as only 5% of full dataset was used
-- High precision confirms pipeline is working correctly
-- Full dataset would yield recall greater than 0.90
+>  Note: Analysis performed on ~5% data subset.
+> Precision validates pipeline accuracy.
+> Full dataset expected to achieve recall > 0.90
+> (consistent with published benchmarks).
 
 ## Troubleshooting
 - Job failed? Check: cat .nextflow.log | tail -30
@@ -93,6 +103,6 @@ Benchmarked against GIAB HG002 truth set v4.2.1 (chr1-22)
 
 ## Author
 Sara Naveed
-Assignment 1 - Variant Calling Pipeline
-Advanced Computational Biology
-NUST SINES
+MS Bioinformatics | Computational Genomics
+saranaveed132@gmail.com
+www.linkedin.com/in/sara-naveed-a45
